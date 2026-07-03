@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_colors.dart';
+import '../../services/manifestacao_service.dart';
 
 class SolicitacaoScreen extends StatefulWidget {
   const SolicitacaoScreen({super.key});
@@ -16,6 +17,9 @@ class _SolicitacaoScreenState extends State<SolicitacaoScreen> {
   final TextEditingController endereco = TextEditingController();
   final TextEditingController descricao = TextEditingController();
 
+  final ManifestacaoService _service = ManifestacaoService();
+  bool _enviando = false;
+
   @override
   void dispose() {
     endereco.dispose();
@@ -23,15 +27,22 @@ class _SolicitacaoScreenState extends State<SolicitacaoScreen> {
     super.dispose();
   }
 
-  void enviar() {
-    if (_formKey.currentState!.validate()) {
+  Future<void> enviar() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _enviando = true);
+    try {
+      final protocolo = await _service.criar(
+        tipo: 'solicitacao',
+        categoria: 'infraestrutura',
+        descricao: 'Endereço: ${endereco.text}\n${descricao.text}',
+        bairro: bairro,
+      );
+      if (!mounted) return;
       showDialog(
         context: context,
         builder: (_) => AlertDialog(
-          title: const Text('Sucesso'),
-          content: const Text(
-            'Solicitação enviada! Você receberá um número de protocolo.',
-          ),
+          title: const Text('Solicitação enviada'),
+          content: Text('Seu protocolo: $protocolo'),
           actions: [
             TextButton(
               onPressed: () {
@@ -43,6 +54,13 @@ class _SolicitacaoScreenState extends State<SolicitacaoScreen> {
           ],
         ),
       );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erro ao enviar: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _enviando = false);
     }
   }
 
@@ -162,12 +180,19 @@ class _SolicitacaoScreenState extends State<SolicitacaoScreen> {
               const SizedBox(height: 30),
 
               ElevatedButton(
-                onPressed: enviar,
+                onPressed: _enviando ? null : enviar,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                 ),
-                child: const Text('Enviar Solicitação'),
+                child: _enviando
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Text('Enviar Solicitação'),
               ),
             ],
           ),

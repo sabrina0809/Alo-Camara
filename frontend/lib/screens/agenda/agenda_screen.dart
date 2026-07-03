@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../models/evento_model.dart';
+import '../../services/evento_service.dart';
 
 class AgendaScreen extends StatefulWidget {
   const AgendaScreen({super.key});
@@ -12,6 +14,15 @@ class _AgendaScreenState extends State<AgendaScreen> {
   int currentMonth = DateTime.now().month - 1;
 
   String selectedFilter = "Todos";
+
+  final EventoService _service = EventoService();
+  late Future<List<EventoModel>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _service.listar();
+  }
 
   final List<String> months = const [
     "Janeiro","Fevereiro","Março","Abril","Maio","Junho",
@@ -85,8 +96,34 @@ class _AgendaScreenState extends State<AgendaScreen> {
 
                
                 Expanded(
-                  child: ListView(
-                    children: _buildEvents(),
+                  child: FutureBuilder<List<EventoModel>>(
+                    future: _future,
+                    builder: (context, snap) {
+                      if (snap.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      if (snap.hasError) {
+                        return Center(
+                          child: Text(
+                            "Erro ao carregar eventos:\n${snap.error}",
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(color: Colors.redAccent),
+                          ),
+                        );
+                      }
+                      final eventos = (snap.data ?? [])
+                          .where((e) =>
+                              selectedFilter == "Todos" ||
+                              e.tipoLabel == selectedFilter)
+                          .toList();
+                      if (eventos.isEmpty) {
+                        return const Center(
+                          child: Text("Nenhum evento agendado.",
+                              style: TextStyle(color: Colors.white54)),
+                        );
+                      }
+                      return ListView(children: eventos.map(_eventoCard).toList());
+                    },
                   ),
                 ),
 
@@ -270,50 +307,23 @@ class _AgendaScreenState extends State<AgendaScreen> {
   }
 
 
-  List<Widget> _buildEvents() {
-    final events = <Map<String, String>>[
-      {
-        "tipo": "Sessão",
-        "dia": "27",
-        "mes": "Fev",
-        "titulo": "Sessão Ordinária da Câmara",
-        "hora": "14:00",
-        "local": "Plenário Principal",
-        "pessoas": "15 participantes",
-      },
-      {
-        "tipo": "Audiência",
-        "dia": "28",
-        "mes": "Fev",
-        "titulo": "Audiência Pública - Transporte",
-        "hora": "09:00",
-        "local": "Auditório",
-        "pessoas": "45 participantes",
-      },
-      {
-        "tipo": "Comissão",
-        "dia": "1",
-        "mes": "Mar",
-        "titulo": "Comissão de Infraestrutura",
-        "hora": "10:00",
-        "local": "Sala de Reuniões 2",
-        "pessoas": "8 participantes",
-      },
+  Widget _eventoCard(EventoModel e) {
+    const meses = [
+      "Jan", "Fev", "Mar", "Abr", "Mai", "Jun",
+      "Jul", "Ago", "Set", "Out", "Nov", "Dez"
     ];
-
-    return events
-        .where((e) =>
-            selectedFilter == "Todos" || e["tipo"] == selectedFilter)
-        .map((e) => _evento(
-              dia: e["dia"]!,
-              mes: e["mes"]!,
-              titulo: e["titulo"]!,
-              tipo: e["tipo"]!,
-              hora: e["hora"]!,
-              local: e["local"]!,
-              participantes: e["pessoas"]!,
-            ))
-        .toList();
+    final d = e.dataHora;
+    final hora =
+        "${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}";
+    return _evento(
+      dia: d.day.toString(),
+      mes: meses[d.month - 1],
+      titulo: e.titulo,
+      tipo: e.tipoLabel,
+      hora: hora,
+      local: e.local ?? "—",
+      participantes: e.status,
+    );
   }
 
 

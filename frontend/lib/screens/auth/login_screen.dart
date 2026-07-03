@@ -335,7 +335,7 @@ class _LoginScreenState extends State<LoginScreen> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
         transform: isHover
-            ? (Matrix4.identity()..translate(0, -4, 0))
+            ? (Matrix4.identity()..translate(0.0, -4.0, 0.0))
             : Matrix4.identity(),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
