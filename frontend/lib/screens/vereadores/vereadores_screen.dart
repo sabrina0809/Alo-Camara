@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/vereador.dart';
+import '../../services/vereador_service.dart';
 import 'vereador_detail.dart';
 
 class VereadoresScreen extends StatefulWidget {
@@ -21,70 +22,53 @@ class _VereadoresScreenState extends State<VereadoresScreen> {
     "Oeste",
   ];
 
-  final List<Vereador> vereadores = [
-    Vereador(
-      nome: "Maria Silva Santos",
-      partido: "Partido A",
-      regiao: "Centro",
-      nota: 4.8,
-      avaliacoes: 128,
-    ),
-    Vereador(
-      nome: "João Pedro Costa",
-      partido: "Partido B",
-      regiao: "Norte",
-      nota: 4.5,
-      avaliacoes: 128,
-    ),
-    Vereador(
-      nome: "Ana Carolina Lima",
-      partido: "Partido C",
-      regiao: "Sul",
-      nota: 4.9,
-      avaliacoes: 128,
-    ),
-    Vereador(
-      nome: "Carlos Alberto Souza",
-      partido: "Partido D",
-      regiao: "Leste",
-      nota: 4.6,
-      avaliacoes: 128,
-    ),
-    Vereador(
-      nome: "Beatriz Oliveira",
-      partido: "Partido E",
-      regiao: "Oeste",
-      nota: 4.7,
-      avaliacoes: 128,
-    ),
-  ];
+  final VereadorService _service = VereadorService();
+  late Future<List<Vereador>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _carregar();
+  }
+
+  // Puxa do backend (ou do mock, conforme ApiConfig.useMockData) e converte
+  // o VereadorModel da API para o model usado pela tela.
+  Future<List<Vereador>> _carregar() async {
+    final models = await _service.listar();
+    return models
+        .map((m) => Vereador(
+              nome: m.nome,
+              partido: m.partido ?? "—",
+              regiao: m.regiao ?? "—",
+              nota: 0.0,
+              avaliacoes: 0,
+            ))
+        .toList();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0F172A),
-
       appBar: AppBar(
         backgroundColor: const Color(0xFF1E293B),
-
-       
         automaticallyImplyLeading: false,
-
+        // Mostra "voltar" só quando a tela foi empurrada (ex: via "Escolher
+        // Vereador"). Como aba do Dashboard, não há para onde voltar.
+        leading: Navigator.canPop(context)
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back, color: Colors.white),
+                onPressed: () => Navigator.pop(context),
+              )
+            : null,
         title: const Text(
           "Vereadores",
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
+          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
         ),
       ),
-
       body: Column(
         children: [
-
           const SizedBox(height: 12),
-
-        
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: TextField(
@@ -102,10 +86,7 @@ class _VereadoresScreenState extends State<VereadoresScreen> {
               ),
             ),
           ),
-
           const SizedBox(height: 12),
-
-         
           SizedBox(
             height: 45,
             child: ListView.builder(
@@ -115,43 +96,57 @@ class _VereadoresScreenState extends State<VereadoresScreen> {
               itemBuilder: (context, index) {
                 final f = filters[index];
                 final selected = f == selectedFilter;
-
                 return GestureDetector(
                   onTap: () => setState(() => selectedFilter = f),
-
                   child: Container(
                     margin: const EdgeInsets.only(right: 10),
                     padding: const EdgeInsets.symmetric(horizontal: 16),
-
                     decoration: BoxDecoration(
-                      color: selected
-                          ? Colors.indigo
-                          : const Color(0xFF1E293B),
+                      color: selected ? Colors.indigo : const Color(0xFF1E293B),
                       borderRadius: BorderRadius.circular(20),
                     ),
-
                     alignment: Alignment.center,
-
-                    child: Text(
-                      f,
-                      style: const TextStyle(color: Colors.white),
-                    ),
+                    child: Text(f, style: const TextStyle(color: Colors.white)),
                   ),
                 );
               },
             ),
           ),
-
           const SizedBox(height: 12),
-
-          
           Expanded(
-            child: ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              children: vereadores.where((v) {
-                return selectedFilter == "Todas" ||
-                    v.regiao == selectedFilter;
-              }).map(_card).toList(),
+            child: FutureBuilder<List<Vereador>>(
+              future: _future,
+              builder: (context, snap) {
+                if (snap.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (snap.hasError) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(
+                        "Erro ao carregar vereadores:\n${snap.error}",
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.redAccent),
+                      ),
+                    ),
+                  );
+                }
+                final lista = (snap.data ?? [])
+                    .where((v) =>
+                        selectedFilter == "Todas" || v.regiao == selectedFilter)
+                    .toList();
+                if (lista.isEmpty) {
+                  return const Center(
+                    child: Text("Nenhum vereador encontrado.",
+                        style: TextStyle(color: Colors.white54)),
+                  );
+                }
+                return ListView(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  children: lista.map(_card).toList(),
+                );
+              },
             ),
           ),
         ],
@@ -169,47 +164,32 @@ class _VereadoresScreenState extends State<VereadoresScreen> {
           ),
         );
       },
-
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(14),
-
         decoration: BoxDecoration(
           color: const Color(0xFF1E293B),
           borderRadius: BorderRadius.circular(14),
         ),
-
         child: Row(
           children: [
-
             CircleAvatar(
-              backgroundColor: Colors.indigo.withOpacity(0.3),
+              backgroundColor: Colors.indigo.withValues(alpha: 0.3),
               child: Text(
                 v.nome.substring(0, 1),
                 style: const TextStyle(color: Colors.white),
               ),
             ),
-
             const SizedBox(width: 12),
-
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-
-                  Text(v.nome,
-                      style: const TextStyle(color: Colors.white)),
-
+                  Text(v.nome, style: const TextStyle(color: Colors.white)),
                   Text(v.partido,
                       style: const TextStyle(color: Colors.white70)),
-
                   Text(v.regiao,
                       style: const TextStyle(color: Colors.white54)),
-
-                  const SizedBox(height: 6),
-
-                  Text("⭐ ${v.nota} (${v.avaliacoes})",
-                      style: const TextStyle(color: Colors.white70)),
                 ],
               ),
             ),
